@@ -1,0 +1,9 @@
+POST http://localhost:8080/events HTTP/1.1
+content-type: application/json
+
+{
+    "eventSource": "Source",
+    "name": "EventName",
+    "data": "EventData"
+}
+

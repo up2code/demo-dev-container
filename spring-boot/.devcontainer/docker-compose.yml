@@ -1,0 +1,93 @@
+version: '3.8'
+
+networks:
+  local_network:
+    driver: bridge
+
+services:
+  app:
+    container_name: demo-dev-con-app
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # NOTE: POSTGRES_DB/USER/PASSWORD should match values in db container
+        MYSQL_PASSWORD: password
+        MYSQL_USER: campen_rw
+        MYSQL_DATABASE: campen
+        MYSQL_HOSTNAME: demo-test-con-mysql 
+
+    volumes:
+      - ../..:/workspaces:cached
+      
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+    networks:
+      - local_network
+
+
+    # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
+    # (Adding the "ports" property to this file will not forward from a Codespace.)
+
+  db:
+    container_name: demo-test-con-mysql
+    image: mysql:latest
+    restart: unless-stopped
+    volumes:
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    environment:
+      # NOTE: POSTGRES_DB/USER/PASSWORD should match values in app container
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: campen
+      MYSQL_USER: campen_rw
+      MYSQL_PASSWORD: password
+    networks:
+      - local_network
+
+  mysqld-exporter:
+    image: quay.io/prometheus/mysqld-exporter
+    restart: unless-stopped
+    ports:
+      - "9104:9104"
+    volumes:
+      - ./mysql_exporter:/etc/myslq_exporter
+    environment:
+      DATA_SOURCE_NAME: "exporter:password@tcp(db:3306)/"
+    command:
+     - "--mysqld.username=exporter:password"
+     - "--mysqld.address=db:3306"
+    networks:
+      - local_network
+    depends_on:
+      - db
+
+    # Add "forwardPorts": ["5432"] to **devcontainer.json** to forward PostgreSQL locally.
+    # (Adding the "ports" property to this file will not forward from a Codespace.)
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - local_network
+  
+  node-exporter:
+    image: prom/node-exporter
+    networks:
+      - local_network
+    ports:
+      - 9100:9100
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    volumes:
+      - ./grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/main.yaml
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - local_network
